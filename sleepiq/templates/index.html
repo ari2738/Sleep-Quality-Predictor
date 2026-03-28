@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SleepIQ – Sleep Quality Predictor</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <span class="moon">🌙</span>
+    <span class="logo-text">Sleep<em>IQ</em></span>
+  </div>
+  <p class="tagline">ML-powered sleep quality analysis &amp; personalized recommendations</p>
+  <div class="accuracy-pill">🤖 Random Forest &nbsp;·&nbsp; <strong>{{ accuracy }}%</strong> accuracy</div>
+</header>
+
+<!-- ── NAV TABS ── -->
+<nav class="tabs">
+  <a href="/"          class="tab {% if page=='predictor' %}active{% endif %}">🔮 Predictor</a>
+  <a href="/analytics" class="tab {% if page=='analytics' %}active{% endif %}">📊 Analytics</a>
+  <a href="/history"   class="tab {% if page=='history'   %}active{% endif %}">📅 History</a>
+</nav>
+
+<main>
+
+<!-- ════════════════════════════════
+     PREDICTOR PAGE
+     ════════════════════════════════ -->
+{% if page == 'predictor' %}
+<form id="sleepForm">
+
+  <div class="card">
+    <div class="card-header">🛌 Sleep Basics</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Sleep Duration (hours)</label>
+        <input type="number" id="sleep_hours" min="1" max="14" step="0.5" value="7.5">
+      </div>
+      <div class="field">
+        <label>Bedtime</label>
+        <input type="time" id="bedtime" value="23:00">
+      </div>
+      <div class="field">
+        <label>Wake-up Time</label>
+        <input type="time" id="waketime" value="07:00">
+      </div>
+      <div class="field">
+        <label>Sleep Interruptions?</label>
+        <div class="toggle-group">
+          <input type="radio" name="interruptions" id="intNo"  value="0" checked>
+          <label for="intNo"  class="toggle-btn">✅ No</label>
+          <input type="radio" name="interruptions" id="intYes" value="1">
+          <label for="intYes" class="toggle-btn">⚠️ Yes</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🏃 Lifestyle Factors</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Exercise Duration (min)</label>
+        <input type="number" id="exercise" min="0" max="300" value="30">
+      </div>
+      <div class="field">
+        <label>Screen Time Before Bed (min)</label>
+        <input type="number" id="screen_time" min="0" max="300" value="45">
+      </div>
+      <div class="field">
+        <label>Caffeine Intake</label>
+        <select id="caffeine">
+          <option value="0">None</option>
+          <option value="1" selected>Low — 1 cup</option>
+          <option value="2">Moderate — 2–3 cups</option>
+          <option value="3">High — 4+ cups</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Mood Before Sleep</label>
+        <select id="mood">
+          <option value="5">😊 Very Happy</option>
+          <option value="4">🙂 Happy</option>
+          <option value="3" selected>😐 Neutral</option>
+          <option value="2">😢 Sad</option>
+          <option value="1">😰 Anxious</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field stress-field">
+      <label>🧠 Stress Level — <span id="stressDisplay">5</span>/10</label>
+      <div class="slider-wrap">
+        <input type="range" id="stress" min="0" max="10" value="5"
+               oninput="document.getElementById('stressDisplay').textContent=this.value;
+                        document.getElementById('stressNum').textContent=this.value;
+                        updateSlider(this)">
+        <span class="slider-num" id="stressNum">5</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button type="button" class="btn-primary" onclick="predict()">🔮 Predict Sleep Quality</button>
+    <button type="button" class="btn-secondary" onclick="resetForm()">↺ Reset</button>
+  </div>
+
+</form>
+
+<!-- Result -->
+<section id="result" class="result-section hidden">
+  <div class="result-badge" id="resultBadge">
+    <div class="result-left">
+      <span class="result-emoji" id="resultEmoji">😴</span>
+      <div>
+        <div class="result-label">Predicted Sleep Quality</div>
+        <div class="result-quality" id="resultQuality">Good</div>
+        <div class="result-conf"   id="resultConf"></div>
+      </div>
+    </div>
+    <div class="result-score-wrap">
+      <svg class="score-ring" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r="32" fill="none" stroke="#ffffff12" stroke-width="6"/>
+        <circle cx="40" cy="40" r="32" fill="none" stroke-width="6" stroke-linecap="round"
+                id="scoreArc" stroke-dasharray="201" stroke-dashoffset="201"
+                transform="rotate(-90 40 40)"/>
+      </svg>
+      <div class="score-center">
+        <span class="score-num" id="scoreNum">0</span>
+        <span class="score-lbl">/100</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card suggestions-card">
+    <div class="card-header">💡 Personalized Recommendations</div>
+    <ul class="tip-list" id="tipList"></ul>
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ════════════════════════════════
+     ANALYTICS PAGE
+     ════════════════════════════════ -->
+{% if page == 'analytics' %}
+
+<div class="card">
+  <div class="card-header">📈 Model Overview</div>
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div class="stat-val">{{ accuracy }}%</div>
+      <div class="stat-lbl">Overall Accuracy</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">{{ weighted_f1 }}%</div>
+      <div class="stat-lbl">Weighted F1 Score</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">200</div>
+      <div class="stat-lbl">Decision Trees</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">8</div>
+      <div class="stat-lbl">Input Features</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📊 Per-Class Metrics</div>
+  <div class="metrics-table">
+    <div class="mt-header">
+      <span>Class</span><span>Precision</span><span>Recall</span><span>F1 Score</span>
+    </div>
+    {% for m in metrics %}
+    <div class="mt-row">
+      <span class="cls-badge cls-{{ m.name|lower }}">{{ m.name }}</span>
+      <span>
+        <div class="bar-wrap">
+          <div class="bar-fill" style="width:{{ m.precision }}%;background:var(--accent)"></div>
+        </div>{{ m.precision }}%
+      </span>
+      <span>
+        <div class="bar-wrap">
+          <div class="bar-fill" style="width:{{ m.recall }}%;background:var(--teal)"></div>
+        </div>{{ m.recall }}%
+      </span>
+      <span>
+        <div class="bar-wrap">
+          <div class="bar-fill" style="width:{{ m.f1 }}%;background:var(--avg)"></div>
+        </div>{{ m.f1 }}%
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">🔲 Confusion Matrix</div>
+  <div class="cm-wrap">
+    <div class="cm-grid" style="grid-template-columns: auto {% for c in classes %}1fr {% endfor %}">
+      <div class="cm-cell cm-corner"></div>
+      {% for c in classes %}
+      <div class="cm-cell cm-head">{{ c }}</div>
+      {% endfor %}
+      {% for i, row in enumerate(cm) %}
+      <div class="cm-cell cm-side">{{ classes[i] }}</div>
+      {% for j, val in enumerate(row) %}
+      <div class="cm-cell cm-val {% if i==j %}cm-diag{% endif %}">{{ val }}</div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+    <p class="cm-note">Rows = Actual &nbsp;·&nbsp; Columns = Predicted</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">🔍 Feature Importance</div>
+  <div class="fi-list">
+    {% set features = [
+      ("Sleep Duration","#5de0c8"),("Stress Level","#f77a6f"),
+      ("Exercise","#7c6ff7"),("Screen Time","#f7c86f"),
+      ("Caffeine","#b4a9ff"),("Mood","#5de0c8"),
+      ("Interruptions","#f77a6f"),("Bedtime Hour","#7c6ff7")
+    ] %}
+    {% set importances = [28, 22, 14, 11, 9, 8, 5, 3] %}
+    {% for i in range(features|length) %}
+    <div class="fi-row">
+      <span class="fi-name">{{ features[i][0] }}</span>
+      <div class="fi-bar-wrap">
+        <div class="fi-bar" style="width:{{ importances[i] * 3 }}px;background:{{ features[i][1] }}"></div>
+      </div>
+      <span class="fi-val">{{ importances[i] }}%</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endif %}
+
+
+<!-- ════════════════════════════════
+     HISTORY PAGE
+     ════════════════════════════════ -->
+{% if page == 'history' %}
+
+<div class="card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>📅 Prediction History</span>
+    {% if history %}
+    <button class="btn-clear" onclick="clearHistory()">🗑 Clear All</button>
+    {% endif %}
+  </div>
+
+  {% if not history %}
+  <div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <p>No predictions yet.<br>Go to <a href="/">Predictor</a> and make your first prediction!</p>
+  </div>
+  {% else %}
+
+  <div class="hist-table">
+    <div class="ht-header">
+      <span>Date</span><span>Time</span><span>Score</span>
+      <span>Quality</span><span>Duration</span><span>Stress</span>
+    </div>
+    {% for e in history %}
+    <div class="ht-row">
+      <span>{{ e.date }}</span>
+      <span>{{ e.time }}</span>
+      <span class="ht-score" style="color:{% if e.quality=='Good' %}var(--good){% elif e.quality=='Average' %}var(--avg){% else %}var(--poor){% endif %}">
+        {{ e.score }}
+      </span>
+      <span>
+        <span class="cls-badge cls-{{ e.quality|lower }}">{{ e.quality }}</span>
+      </span>
+      <span>{{ e.duration }}h</span>
+      <span>{{ e.stress }}/10</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Trend bars -->
+  {% if history|length > 1 %}
+  <div class="trend-section">
+    <div class="trend-title">📈 Score Trend</div>
+    <div class="trend-bars">
+      {% for e in history[:7]|reverse %}
+      <div class="trend-col">
+        <div class="trend-bar"
+             style="height:{{ (e.score/100*80)|int }}px;
+                    background:{% if e.quality=='Good' %}var(--good){% elif e.quality=='Average' %}var(--avg){% else %}var(--poor){% endif %}">
+        </div>
+        <div class="trend-date">{{ e.date.split(' ')[0] }} {{ e.date.split(' ')[1] }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endif %}
+
+</main>
+
+<footer>
+  <p>SleepIQ &nbsp;·&nbsp; Random Forest ML &nbsp;·&nbsp; Flask + Python</p>
+</footer>
+
+<script>
+function updateSlider(el) {
+  const pct = (el.value / el.max) * 100;
+  el.style.setProperty('--val', pct + '%');
+}
+updateSlider(document.getElementById('stress') || {value:5,max:10,style:{setProperty:()=>{}}});
+
+async function predict() {
+  const btn = document.querySelector('.btn-primary');
+  if (!btn) return;
+  btn.textContent = '⏳ Predicting…'; btn.disabled = true;
+
+  const payload = {
+    sleep_hours:   parseFloat(document.getElementById('sleep_hours').value) || 7,
+    stress:        parseInt(document.getElementById('stress').value) || 5,
+    exercise:      parseFloat(document.getElementById('exercise').value) || 0,
+    screen_time:   parseFloat(document.getElementById('screen_time').value) || 0,
+    caffeine:      parseInt(document.getElementById('caffeine').value) || 0,
+    mood:          parseInt(document.getElementById('mood').value) || 3,
+    interruptions: parseInt(document.querySelector('input[name=interruptions]:checked').value) || 0,
+    bedtime:       document.getElementById('bedtime').value || '23:00',
+  };
+
+  try {
+    const res  = await fetch('/predict', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) { alert('Server error: ' + res.status); btn.textContent='🔮 Predict Sleep Quality'; btn.disabled=false; return; }
+    const data = await res.json();
+    if (data.status==='success') showResult(data);
+    else alert('Prediction error: ' + data.message);
+  } catch(e) { alert('Could not connect. Make sure app.py is running.'); }
+
+  btn.textContent = '🔮 Predict Sleep Quality'; btn.disabled = false;
+}
+
+function showResult(data) {
+  const colors = {Good:'#5de0c8', Average:'#f7c86f', Poor:'#f77a6f'};
+  const emojis = {Good:'😴', Average:'😐', Poor:'😟'};
+  const descs  = {
+    Good:    'Your sleep habits support healthy, restorative rest.',
+    Average: 'A few improvements can make a significant difference.',
+    Poor:    'Your sleep quality needs attention — follow the tips below.'
+  };
+  const color = colors[data.quality]||'#7c6ff7';
+  const badge = document.getElementById('resultBadge');
+  badge.style.borderColor = color;
+  badge.style.background  = color+'12';
+
+  document.getElementById('resultEmoji').textContent   = emojis[data.quality];
+  document.getElementById('resultQuality').textContent = data.quality;
+  document.getElementById('resultQuality').style.color = color;
+  document.getElementById('resultConf').textContent    = data.confidence+'% confidence · '+descs[data.quality];
+
+  // Score ring animation
+  const arc = document.getElementById('scoreArc');
+  arc.style.stroke = color;
+  setTimeout(()=>{ arc.style.strokeDashoffset = 201 - (data.score/100)*201; }, 80);
+  document.getElementById('scoreNum').textContent = data.score;
+  document.getElementById('scoreNum').style.color = color;
+
+  // Tips
+  document.getElementById('tipList').innerHTML = data.suggestions.map(t =>
+    `<li><span class="tip-ico">${t.split(' ')[0]}</span><span>${t.slice(t.indexOf(' ')+1)}</span></li>`
+  ).join('');
+
+  const sec = document.getElementById('result');
+  sec.classList.remove('hidden');
+  sec.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function resetForm() {
+  document.getElementById('result').classList.add('hidden');
+  ['sleep_hours','exercise','screen_time'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = id==='sleep_hours'?7.5:id==='exercise'?30:45;
+  });
+  const s = document.getElementById('stress');
+  if(s){ s.value=5; updateSlider(s);
+    document.getElementById('stressDisplay').textContent='5';
+    document.getElementById('stressNum').textContent='5'; }
+  document.getElementById('caffeine').value=1;
+  document.getElementById('mood').value=3;
+  document.getElementById('intNo').checked=true;
+}
+
+async function clearHistory() {
+  if (!confirm('Clear all history?')) return;
+  await fetch('/clear_history', {method:'POST'});
+  location.reload();
+}
+</script>
+</body>
+</html>
