@@ -73,35 +73,6 @@ sleep-predictor/
 
 ---
 
-## ⚙ Installation and Setup
-
-**Step 1: Clone the repository**
-```bash
-git clone https://github.com/your-username/sleepiq-predictor.git
-cd sleepiq-predictor
-```
-
-**Step 2: Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-**Step 3: (Optional) Add Kaggle Dataset**
-- Download from: https://www.kaggle.com/datasets/uom190346a/sleep-health-and-lifestyle-dataset
-- Place `Sleep_health_and_lifestyle_dataset.csv` in the project folder
-- In `app.py`, change `load_artifact()` to `train_from_csv("Sleep_health_and_lifestyle_dataset.csv")` once, run, then revert
-
-**Step 4: Run the app**
-```bash
-python app.py
-```
-
-**Step 5: Open in browser**
-```
-http://127.0.0.1:5000
-```
-
----
 
 ## 📊 Pages & Features
 
